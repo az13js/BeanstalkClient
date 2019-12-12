@@ -55,7 +55,18 @@ class BeanstalkClient
         $command = "reserve\r\n";
         //$this->sendTo($command); 不能发送两次
         $this->sendTo($command);
-        $respond = $this->recv($this->maxReadSize);
+        do {
+            try {
+                $respond = $this->recv($this->maxReadSize);
+                $loop = false;
+            } catch (Exception $e) {
+                if (1 == $e->getCode()) {
+                    $loop = true;
+                } else {
+                    throw $e;
+                }
+            }
+        } while ($loop);
         if (0 === mb_strpos($respond, 'RESERVED ')) {
             $info = ltrim($respond, 'RESERVED ');
             list($id, $byte) = explode(' ', $info);
@@ -105,7 +116,7 @@ class BeanstalkClient
     {
         $respond = stream_get_line($this->socket, $byte, "\r\n");
         if (false === $respond) {
-            throw new Exception('stream_get_line() return false');
+            throw new Exception('stream_get_line() return false', 1);
         }
         return $respond;
     }
