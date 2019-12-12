@@ -70,11 +70,14 @@ class BeanstalkClient
     }
 }
 
+$total_num = 500000;
+
 $c = new BeanstalkClient('127.0.0.1:11300', 2, 2);
-$c->useTube('lubenwei');
-$data = "卢本伟\r\n我没有开挂";
-echo date('Y-m-d H:i:s') . PHP_EOL;
-for ($i = 0; $i < 1000; $i++) {
+
+$data = json_encode(['value' => uniqid('default_', true)]);
+$start = time();
+for ($i = 0; $i < $total_num; $i++) {
     $c->push($data);
 }
-echo date('Y-m-d H:i:s') . PHP_EOL;
+$end = time();
+echo ($total_num / ($end - $start)) . PHP_EOL;
