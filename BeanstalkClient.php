@@ -28,11 +28,7 @@ class BeanstalkClient
         // 在发送 use 命令后就算 stream_socket_sendto 没有异常我们也不知道有没有真的 use 指定的 tube
         // 只有收到服务端返回的信息才能判断。为什么多算 20 个字节，因为有可能发生 UNKNOWN_COMMAND\r\n
         // 之类的别的异常返回。
-        $respond = stream_get_line($this->socket, 20 + strlen($tube), "\r\n");
-        if (false === $respond) {
-            // stream_get_line() 返回 false 只有一种可能，那就是出现意外的问题。
-            throw new Exception('stream_get_line() return false');
-        }
+        $respond = $this->recv(20 + strlen($tube));
         if ("USING $tube" == $respond) {
             return true;
         } else {
@@ -46,16 +42,38 @@ class BeanstalkClient
         $bytes = strlen($data);
         $sendData = "put $pri $delay $ttr $bytes\r\n$data\r\n";
         $this->sendTo($sendData);
-        // 这个不知道会返回多大的数据
-        $respond = stream_get_line($this->socket, $this->maxReadSize, "\r\n");
-        if (false === $respond) {
-            // stream_get_line() 返回 false 只有一种可能，那就是出现意外的问题。
-            throw new Exception('stream_get_line() return false');
-        }
+        $respond = $this->recv($this->maxReadSize);
         if (0 === mb_strpos($respond, 'INSERTED ') || 0 === mb_strpos($respond, 'BURIED ')) {
             return true;
         } else {
             throw new Exception("put job fail, server respond=\"$respond\".");
+        }
+    }
+
+    public function reserve(): array
+    {
+        $command = "reserve\r\n";
+        $this->sendTo($command);
+        $respond = $this->recv($this->maxReadSize);
+        if (0 === mb_strpos($respond, 'RESERVED ')) {
+            $info = ltrim($respond, 'RESERVED ');
+            list($id, $byte) = explode(' ', $info);
+            $respond = $this->recv($byte + 2);
+            return ['id' => $id, 'data' => $respond];
+        } else {
+            throw new Exception("reserve fail, server respond=\"$respond\".");
+        }
+    }
+
+    public function delete(int $id)
+    {
+        $command = "delete $id\r\n";
+        $this->sendTo($command);
+        $respond = $this->recv(12);
+        if (0 === mb_strpos($respond, 'DELETED')) {
+            return true;
+        } else {
+            throw new Exception("delete fail, server respond=\"$respond\".");
         }
     }
 
@@ -65,5 +83,14 @@ class BeanstalkClient
         if (-1 == $code) {
             throw new Exception("stream_socket_sendto() fail");
         }
+    }
+
+    private function recv(int $byte): string
+    {
+        $respond = stream_get_line($this->socket, $byte, "\r\n");
+        if (false === $respond) {
+            throw new Exception('stream_get_line() return false');
+        }
+        return $respond;
     }
 }
