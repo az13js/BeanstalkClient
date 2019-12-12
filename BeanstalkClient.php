@@ -53,13 +53,29 @@ class BeanstalkClient
     public function reserve(): array
     {
         $command = "reserve\r\n";
+        //$this->sendTo($command); 不能发送两次
         $this->sendTo($command);
         $respond = $this->recv($this->maxReadSize);
         if (0 === mb_strpos($respond, 'RESERVED ')) {
             $info = ltrim($respond, 'RESERVED ');
             list($id, $byte) = explode(' ', $info);
             $respond = $this->recv($byte + 2);
-            return ['id' => $id, 'data' => $respond];
+            return ['id' => intval($id), 'data' => $respond];
+        } else {
+            throw new Exception("reserve fail, server respond=\"$respond\".");
+        }
+    }
+
+    public function reserveWithTimeout(int $sec): array
+    {
+        $command = "reserve-with-timeout $sec\r\n";
+        $this->sendTo($command);
+        $respond = $this->recv($this->maxReadSize);
+        if (0 === mb_strpos($respond, 'RESERVED ')) {
+            $info = ltrim($respond, 'RESERVED ');
+            list($id, $byte) = explode(' ', $info);
+            $respond = $this->recv($byte + 2);
+            return ['id' => intval($id), 'data' => $respond];
         } else {
             throw new Exception("reserve fail, server respond=\"$respond\".");
         }
@@ -69,7 +85,7 @@ class BeanstalkClient
     {
         $command = "delete $id\r\n";
         $this->sendTo($command);
-        $respond = $this->recv(12);
+        $respond = $this->recv(100);
         if (0 === mb_strpos($respond, 'DELETED')) {
             return true;
         } else {
